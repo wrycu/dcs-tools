@@ -1,0 +1,22 @@
+{% if joystick %}
+<div class="ui card">
+    <div class="image">
+        <img src="data:image/png;base64,{{ joystick|safe }}" alt="stick" id="stick_data">
+    </div>
+    <div class="content">
+        Stick
+        <a id="stick_save">
+            <i class="save icon"></i>
+        </a>
+    </div>
+</div>{% endif %}|{% if throttle %}<div class="ui card">
+    <div class="image">
+        <img src="data:image/png;base64,{{ throttle|safe }}" alt="stick" id="throttle_data">
+    </div>
+    <div class="content">
+        Throttle
+        <a id="throttle_save">
+            <i class="save icon"></i>
+        </a>
+    </div>
+</div>{% endif %}

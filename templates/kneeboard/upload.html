@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block content %}
+    <form method="POST" action="" enctype="multipart/form-data">
+    <div class="ui cards">
+        <div class="card">
+            <div class="content">
+                <div class="header">
+                    Mission File
+                </div>
+                <div class="description">
+                    The Mission to add images to
+                </div>
+            </div>
+            <div class="extra content">
+                <p><input type="file" name="mission"></p>
+            </div>
+        </div>
+        <div class="card">
+            <div class="content">
+                <div class="header">
+                    Image File
+                </div>
+                <div class="description">
+                    Image to add to Kneeboard
+                </div>
+            </div>
+            <div class="extra content">
+                <p><input type="file" name="image"></p>
+            </div>
+        </div>
+    </div>
+        <br>
+    <p><input type="submit" value="Submit"></p>
+     </form>
+{% endblock %}

@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+
+{% block content %}
+<script>
+        function save_pic(controller) {
+            var link = document.createElement("a");
+            link.setAttribute("href", $('#' + controller + '_data').attr('src'));
+            link.setAttribute("download", controller + '.png');
+            link.click();
+        }
+        function upload(data) {
+            console.log(data);
+            $.ajax({
+                url: "{{ url_for('mapping.upload') }}",
+                type: 'POST',
+                data: data,
+                processData: false,  // tell jQuery not to process the data
+                contentType: false,  // tell jQuery not to set contentType
+                success: function(data) {
+                    $("#stick").html(data.split('|')[0]);
+                    $("#throttle").html(data.split('|')[1]);
+                    $("#stick_save").on("click", function(){
+                        save_pic('stick');
+                    });
+                    $("#throttle_save").on("click", function(){
+                        save_pic('throttle');
+                    });
+                    return;
+                },
+                error: function(xhr, text, error) {
+                    $("#error_content").text(xhr.responseText);
+                    $('.ui.modal').modal('show');
+                },
+            });
+        }
+
+        function dropHandler(ev) {
+            // Prevent default behavior (Prevent file from being opened)
+            ev.preventDefault();
+
+            if (ev.dataTransfer.items) {
+                var file = ev.dataTransfer.files;
+                var fd = new FormData();
+                fd.append('controls', file[0]);
+                // we only support two files. if they drag more, tough.
+                if (file.length > 1)
+                    fd.append('controls2', file[1]);
+                upload(fd);
+            }
+        }
+
+        function dragOverHandler(ev) {
+            // Prevent default behavior (Prevent file from being opened)
+            ev.preventDefault();
+        }
+    </script>
+    <div class="ui grid">
+        <div class="centered row">
+            <div class="ui message">
+                <i class="close icon"></i>
+                <div class="header">
+                    Control mapper
+                </div>
+                <p>This page parses control mappings and creates a visual representation of what's bound to what</p>
+                <p><b>Note:</b> Currently only the Warthog and X52 are supported</p>
+            </div>
+        </div>
+        <div class="row">
+            <div class="seven wide column"></div>
+            <ol class="ui list">
+                <li>
+                    Export controls
+                    <ol>
+                        <li>Launch DCS</li>
+                        <li>Click "Options"</li>
+                        <li>Click "Controls"</li>
+                        <li>Select aircraft</li>
+                        <li>Click "Make HTML"</li>
+                    </ol>
+                </li>
+                <li>Upload controls (Warthog is two files; X52 is one)</li>
+                <li>Download visual control representation</li>
+            </ol>
+        </div>
+
+        <div class="centered row">
+            <div class="ui center aligned basic segment">
+                  <form method="post" id="myform">
+                        <div class="field">
+                            <div class="ui action input">
+                                <label for="controls" class="ui icon button">
+                                    <i class="attach icon"></i>
+                                    Upload
+                                    <input type="file" id="controls" name="controls" style="display: none">
+                                </label>
+                            </div>
+                        </div>
+                    </form>
+                  <div class="ui horizontal divider">
+                    Or
+                  </div>
+                    <div class="ui blue inverted segment" ondrop="dropHandler(event);" ondragover="dragOverHandler(event);">
+                        Drag and drop
+                        <i class="upload icon"></i>
+                    </div>
+            </div>
+        </div>
+        <div class="row">
+            <div class="five wide column"></div>
+            <div class="three wide column">
+                <div id="stick"></div>
+            </div>
+            <div class="three wide column">
+                <div id="throttle"></div>
+            </div>
+            <div class="five wide column"></div>
+        </div>
+    </div>
+
+    <div id="error" class="ui modal">
+        <div class="header">Error</div>
+        <div id="error_content" class="content"></div>
+    </div>
+
+    <script>
+        $(document).ready(function () {
+            $("#controls").change(function(){
+                var formData = new FormData($("#myform")[0]);
+                console.log(formData);
+                upload(formData);
+            });
+        });
+    </script>
+{% endblock %}
