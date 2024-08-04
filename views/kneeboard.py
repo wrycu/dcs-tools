@@ -12,13 +12,25 @@ def landing():
 
 @kneeboard.route('/', methods=['POST'])
 def upload():
-    uploaded_file = request.files['mission']
-    if '.miz' in uploaded_file.filename:
-        print("good miz")
-        parser = InMemoryZip(uploaded_file.read())
-        parser.append('KNEEBOARD\\IMAGES\\' + request.files['image'].filename, request.files['image'].read())
-        return send_file(BytesIO(parser.read()), download_name='test1.miz', as_attachment=True)
-    return 'OK', 200
+    filenames = [x for x in request.files]
+    # pull the mission file from the POST data
+    uploaded_files = []
+    for cur_file in filenames:
+        if '.miz' in request.files[cur_file].filename:
+            uploaded_files.append(request.files[cur_file])
+    if not uploaded_files:
+        return 'No miz file found', 400
+    # check for images
+    image_files = []
+    for cur_file in filenames:
+        if '.miz' not in request.files[cur_file].filename:
+            image_files.append(request.files[cur_file])
+    if not image_files:
+        return 'No kneeboard images found', 400
+    parser = InMemoryZip(uploaded_files[0].read())
+    for cur_file in image_files:
+        parser.append('KNEEBOARD\\IMAGES\\' + cur_file.filename, cur_file.read())
+    return send_file(BytesIO(parser.read()), download_name='test.miz', as_attachment=True, mimetype='application/zip')
 
 
 class InMemoryZip(object):

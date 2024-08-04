@@ -1,35 +1,87 @@
 {% extends "base.html" %}
 {% block content %}
-    <form method="POST" action="" enctype="multipart/form-data">
-    <div class="ui cards">
-        <div class="card">
-            <div class="content">
-                <div class="header">
-                    Mission File
+    <script src="{{ url_for('static', filename='js/dropzone.min.js') }}"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='/css/dropzone.min.css') }}" type="text/css"/>
+
+    <form method="POST" action="" enctype="multipart/form-data" id="kneeboard">
+        <div class="ui cards">
+            <div class="card">
+                <div class="content">
+                    <div class="header">
+                        Upload Files
+                    </div>
+                    <div class="description">
+                        Drag-and-drop a mission and kneeboard image(s)
+                    </div>
                 </div>
-                <div class="description">
-                    The Mission to add images to
+                <div class="extra content">
+                    <p>
+                    <div>
+                        <div class="dropzone" id="myDropzone"></div>
+                        <i class="upload icon"></i>
+                    </div>
+                    </p>
                 </div>
-            </div>
-            <div class="extra content">
-                <p><input type="file" name="mission"></p>
-            </div>
-        </div>
-        <div class="card">
-            <div class="content">
-                <div class="header">
-                    Image File
-                </div>
-                <div class="description">
-                    Image to add to Kneeboard
-                </div>
-            </div>
-            <div class="extra content">
-                <p><input type="file" name="image"></p>
             </div>
         </div>
-    </div>
         <br>
-    <p><input type="submit" value="Submit"></p>
-     </form>
+        <p><input type="submit" value="Submit" id="submit-all"></p>
+    </form>
+
+    <script>
+        Dropzone.options.myDropzone = {
+            url: '{{ url_for("kneeboard.upload") }}',
+            autoProcessQueue: false,
+            uploadMultiple: true,
+            parallelUploads: 5,
+            maxFiles: 10,
+            maxFilesize: 10,
+            addRemoveLinks: true,
+            responseType: "blob",
+            init: function () {
+                dzClosure = this; // Makes sure that 'this' is understood inside the functions below.
+
+                // for Dropzone to process the queue (instead of default form behavior):
+                document.getElementById("submit-all").addEventListener("click", function (e) {
+                    // Make sure that the form isn't actually being sent.
+                    e.preventDefault();
+                    e.stopPropagation();
+                    dzClosure.processQueue();
+                });
+
+                //send all the form data along with the files:
+                this.on("sendingmultiple", function (data, xhr, formData) {
+                    xhr.responseType = 'arraybuffer';
+                    xhr.processData = false;
+                });
+            },
+            successmultiple: function(data, status, xhr) {
+                const dataBlob = data[0]?.xhr?.response;
+                var blob = new Blob([dataBlob], {type: 'application/octet-stream'});
+                var url = URL.createObjectURL(blob);
+
+                var link = document.createElement('a');
+                link.href = url;
+                let filename;
+                for (const cur_file of data) {
+                    if (cur_file.name.includes('.miz')) {
+                        filename = cur_file.name + "_updated.miz";
+                    }
+                }
+                if (!filename) {
+                    filename = 'updated.miz';
+                }
+                link.download = filename;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(url);
+            }
+        }
+
+    </script>
+    <div id="error" class="ui modal">
+        <div class="header">Error</div>
+        <div id="error_content" class="content"></div>
+    </div>
 {% endblock %}
