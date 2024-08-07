@@ -320,7 +320,7 @@ class X52:
             'JOY_BTN2': (672, 5, SIZE_STANDARD_NORMAL, 'stick'),                              # fire
             'JOY_BTN3': (902, 5, SIZE_STANDARD_NORMAL, 'stick'),                             # fire A
             'JOY_BTN4': (902, 325, SIZE_STANDARD_NORMAL, 'stick'),                             # fire B
-            'JOY_BTN5': (482, 510, SIZE_STANDARD_NORMAL, 'stick'),                              # fire C
+            'JOY_BTN5': (482, 412, SIZE_STANDARD_NORMAL, 'stick'),                              # fire C
             'JOY_BTN_POV1_U': (122, 505, SIZE_STANDARD_NORMAL, 'stick'),                         # pov hat 1 up
             'JOY_BTN_POV1_D': (122, 645, SIZE_STANDARD_NORMAL, 'stick'),
             'JOY_BTN_POV1_L': (22, 575, SIZE_STANDARD_NORMAL, 'stick'),
