@@ -11,6 +11,7 @@ SIZE_MEDIUM = 20
 SIZE_SMALL = 16
 SIZE_STANDARD_NORMAL = 18
 SIZE_STANDARD_SMALL = 27
+SIZE_VIRPIL_SMALL = 14
 
 
 class Parser:
@@ -98,15 +99,22 @@ class Renderer:
         return base64.b64encode(output.getvalue()).decode('utf-8')
 
     def draw_text(self, the_draw, x, y, size, message):
+        # add some spaces to reduce the changes of the text being too long
+        message = message.replace('/', ' / ')
+        message = message.replace('(', ' (')
         # TODO known bugs:
         # * if a given control has no spaces and is longer than the size permitted, we will hang
+        font_size = 18
+        if size == SIZE_VIRPIL_SMALL:
+            font_size = 14
         font = ImageFont.truetype(
             os.path.join(self.base_path, 'app', 'flask_app', 'static', 'font', 'lucon.ttf'),
-            size=18,
+            size=font_size,
         )
         color = 'rgb(0, 0, 0)'  # black color
         while len(message) > size:
             position = message[0:size].rfind(' ')
+            print(f"now processing {message[0:position]}")
             if position != -1:
                 the_draw.text((x, y), message[0:position], fill=color, font=font)
             else:
@@ -144,6 +152,7 @@ class ControlMapper:
             switch_key = None
 
         # detect controller and validate we support it
+        print(title)
         if 'X52' in title:
             controller = X52(switch_key)
         elif 'Warthog' in title:
@@ -156,6 +165,10 @@ class ControlMapper:
                 controller = X56Stick(switch_key)
             elif 'Throttle' in title:
                 controller = X56Throttle(switch_key)
+        elif 'VPC Stick' in title:
+            controller = MongoosT50CM2(switch_key)
+        elif 'VPC Throttle' in title:
+            controller = MT50CM3(switch_key)
         else:
             raise Exception(
                 "Unknown controller: {}. Supported controllers: X-52, X-56, Warthog".format(title)
@@ -993,6 +1006,352 @@ class X56Throttle:
             self.add_control('switch_6_s', 'JOY_BTN11', 17, 865, SIZE_STANDARD_NORMAL, 'throttle')
             self.add_control('thumb_button_1_s', 'JOY_BTN33', 957, 85, SIZE_STANDARD_NORMAL, 'throttle')
             self.add_control('thumb_button_2_s', 'JOY_BTN1', 977, 265, SIZE_STANDARD_NORMAL, 'throttle')
+
+    def add_control(self, friendly_name, technical_name, x, y, size, location):
+        """
+        :param friendly_name:
+            e.g. 'Boat Switch FWD'
+        :param technical_name:
+            e.g. 'JOY_BTN9'
+        :param x:
+            e.g. 42
+        :param y:
+            e.g. 899
+        :param size:
+            e.g. SIZE_STANDARD_NORMAL
+        :param location:
+            e.g. 'throttle'
+        :return:
+            N/A
+        """
+        if friendly_name[-2:] != '_s':
+            self.control_mapping[technical_name] = friendly_name
+            self.position_mapping[technical_name] = (x, y, size, location)
+        else:
+            self.control_mapping[self.switch_key + technical_name] = friendly_name
+            self.switched_mapping[technical_name] = (x, y, size, location)
+
+    def add_switch(self, control):
+        if control not in self.control_mapping:
+            raise Exception("Unknown switch detected - {}".format(control))
+        self.switches.append(control)
+
+    def lookup_control(self, control):
+        if not control:
+            return None, None
+        try:
+            return self.control_mapping[control], False
+        except KeyError:
+            try:
+                return self.control_mapping[control], True
+            except KeyError:
+                return None, None
+
+    def lookup_position(self, control, switched):
+        if control not in self.position_mapping.keys() and not switched:
+            # this control doesn't actually exist
+            raise Exception("Control does not exist")
+        if switched:
+            return self.switched_mapping[control]
+        else:
+            return self.position_mapping[control]
+
+
+class MongoosT50CM2:
+    def __init__(self, switch_key):
+        """
+            Mapping of buttons to actual buttons
+            # https://support.virpil.com/en/support/solutions/articles/47001250820-vpc-mongoost-50cm2-grip
+                Stick
+                    1    JOY_BTN1
+                    2    JOY_BTN2
+                    3    JOY_BTN3
+                    3U   JOY_BTN_POV1_U
+                    3D  JOY_BTN_POV1_D
+                    3L  JOY_BTN_POV1_L
+                    3R  JOY_BTN_POV1_R
+                    4   JOY_BTN4
+                    5   JOY_BTN5
+                    6   JOY_BTN6
+                    7   ...
+                    8
+                    9
+                    10
+                    11
+                    12
+                    13
+                    14
+                    15
+                    16
+                    17
+                    18
+                    19
+                    20
+                    21
+                    22
+                    23
+                    24
+                    25
+                    26
+                    27
+                    28
+
+        """
+        self.name = 'mongoosT_50cm2'
+        self.controller_type = 'hotas'
+        self.ignore_mapping = {
+            'JOY_Z',
+            'JOY_Y',
+            'JOY_X',
+            'JOY_RZ',
+            'JOY_RY',
+            'JOY_RX',
+        }
+        self.switches = []
+        self.stick_file = f'virpil_stick.png'
+        self.render_stick = True
+        self.render_throttle = False
+
+        self.switch_key = switch_key
+
+        self.control_mapping = {}
+        self.position_mapping = {}
+        self.switched_mapping = {}
+
+        # to determine these numbers, add two to the left value and five to the top value
+        self.add_control('JOY_BTN1', 'JOY_BTN1', 935, 545, SIZE_VIRPIL_SMALL, 'stick')
+        self.add_control('JOY_BTN2', 'JOY_BTN2', 935, 600, SIZE_VIRPIL_SMALL, 'stick')
+        self.add_control('JOY_BTN3', 'JOY_BTN3', 235, 310, SIZE_VIRPIL_SMALL, 'stick')
+        self.add_control('JOY_BTN_POV1_U', 'JOY_BTN_POV1_U', 235, 255, SIZE_VIRPIL_SMALL, 'stick')
+        self.add_control('JOY_BTN_POV1_D', 'JOY_BTN_POV1_D', 235, 360, SIZE_VIRPIL_SMALL, 'stick')
+        self.add_control('JOY_BTN_POV1_L', 'JOY_BTN_POV1_L', 90, 310, SIZE_VIRPIL_SMALL, 'stick')
+        self.add_control('JOY_BTN_POV1_R', 'JOY_BTN_POV1_R', 380, 310, SIZE_VIRPIL_SMALL, 'stick')
+        self.add_control('JOY_BTN4', 'JOY_BTN4', 380, 90, SIZE_VIRPIL_SMALL, 'stick')
+        self.add_control('JOY_BTN5', 'JOY_BTN5', 755, 90, SIZE_VIRPIL_SMALL, 'stick')
+        self.add_control('JOY_BTN6', 'JOY_BTN6', 755, 35, SIZE_VIRPIL_SMALL, 'stick')
+        self.add_control('JOY_BTN7', 'JOY_BTN7', 900, 90, SIZE_VIRPIL_SMALL, 'stick')
+        self.add_control('JOY_BTN8', 'JOY_BTN8', 755, 145, SIZE_VIRPIL_SMALL, 'stick')
+        self.add_control('JOY_BTN9', 'JOY_BTN9', 615, 90, SIZE_VIRPIL_SMALL, 'stick')
+        self.add_control('JOY_BTN10', 'JOY_BTN10', 930, 200, SIZE_VIRPIL_SMALL, 'stick')
+        self.add_control('JOY_BTN11', 'JOY_BTN11', 235, 500, SIZE_VIRPIL_SMALL, 'stick')
+        self.add_control('JOY_BTN12', 'JOY_BTN12', 235, 450, SIZE_VIRPIL_SMALL, 'stick')
+        self.add_control('JOY_BTN13', 'JOY_BTN13', 380, 500, SIZE_VIRPIL_SMALL, 'stick')
+        self.add_control('JOY_BTN14', 'JOY_BTN14', 235, 555, SIZE_VIRPIL_SMALL, 'stick')
+        self.add_control('JOY_BTN15', 'JOY_BTN15', 90, 500, SIZE_VIRPIL_SMALL, 'stick')
+        self.add_control('JOY_BTN16', 'JOY_BTN16', 930, 310, SIZE_VIRPIL_SMALL, 'stick')
+        self.add_control('JOY_BTN17', 'JOY_BTN17', 1115, 260, SIZE_VIRPIL_SMALL, 'stick')
+        self.add_control('JOY_BTN18', 'JOY_BTN18', 1115, 200, SIZE_VIRPIL_SMALL, 'stick')
+        self.add_control('JOY_BTN19', 'JOY_BTN19', 1115, 310, SIZE_VIRPIL_SMALL, 'stick')
+        self.add_control('JOY_BTN20', 'JOY_BTN20', 935, 450, SIZE_VIRPIL_SMALL, 'stick')
+        self.add_control('JOY_BTN28', 'JOY_BTN28', 935, 395, SIZE_VIRPIL_SMALL, 'stick')
+        self.add_control('JOY_BTN21', 'JOY_BTN21', 790, 745, SIZE_VIRPIL_SMALL, 'stick')
+        self.add_control('JOY_BTN22', 'JOY_BTN22', 790, 695, SIZE_VIRPIL_SMALL, 'stick')
+        self.add_control('JOY_BTN23', 'JOY_BTN23', 935, 750, SIZE_VIRPIL_SMALL, 'stick')
+        self.add_control('JOY_BTN24', 'JOY_BTN24', 790, 800, SIZE_VIRPIL_SMALL, 'stick')
+        self.add_control('JOY_BTN25', 'JOY_BTN25', 645, 750, SIZE_VIRPIL_SMALL, 'stick')
+        self.add_control('JOY_BTN26', 'JOY_BTN26', 930, 865, SIZE_VIRPIL_SMALL, 'stick')
+        self.add_control('JOY_BTN27', 'JOY_BTN27', 755, 450, SIZE_VIRPIL_SMALL, 'stick')
+
+        # Switched
+        """
+        if switch_key:
+            self.add_control('JOY_BTN1_s', 'JOY_BTN1_s', 122, 255, SIZE_STANDARD_NORMAL, 'stick')
+        """
+
+    def add_control(self, friendly_name, technical_name, x, y, size, location):
+        """
+        :param friendly_name:
+            e.g. 'Boat Switch FWD'
+        :param technical_name:
+            e.g. 'JOY_BTN9'
+        :param x:
+            e.g. 42
+        :param y:
+            e.g. 899
+        :param size:
+            e.g. SIZE_STANDARD_NORMAL
+        :param location:
+            e.g. 'throttle'
+        :return:
+            N/A
+        """
+        if friendly_name[-2:] != '_s':
+            self.control_mapping[technical_name] = friendly_name
+            self.position_mapping[technical_name] = (x, y, size, location)
+        else:
+            self.control_mapping[self.switch_key + technical_name] = friendly_name
+            self.switched_mapping[technical_name] = (x, y, size, location)
+
+    def add_switch(self, control):
+        if control not in self.control_mapping:
+            raise Exception("Unknown switch detected - {}".format(control))
+        self.switches.append(control)
+
+    def lookup_control(self, control):
+        if not control:
+            return None, None
+        try:
+            return self.control_mapping[control], False
+        except KeyError:
+            try:
+                return self.control_mapping[control], True
+            except KeyError:
+                return None, None
+
+    def lookup_position(self, control, switched):
+        if control not in self.position_mapping.keys() and not switched:
+            # this control doesn't actually exist
+            raise Exception("Control does not exist")
+        if switched:
+            return self.switched_mapping[control]
+        else:
+            return self.position_mapping[control]
+
+
+class MT50CM3:
+    def __init__(self, switch_key):
+        """
+                Mapping of buttons to actual buttons
+                Coolie Switch Up    JOY_BTN_POV1_U
+                Coolie Switch Down  JOY_BTN_POV1_D
+                Coolie Switch Left  JOY_BTN_POV1_L
+                Coolie Switch Right JOY_BTN_POV1_R
+                Mic Switch FWD      JOY_BTN4
+                Mic Switch AFT      JOY_BTN6
+                Mic Switch LEFT     JOY_BTN3
+                Mic Switch RIGHT    JOY_BTN5
+                SPEEDBRAKE OUT      JOY_BTN7
+                SPEEDBRAKE IN       JOY_BTN8
+                Boat switch FWD     JOY_BTN9
+                Boat Switch AFT     JOY_BTN10
+                China Hat FWD       JOY_BTN11
+                China Hat AFT       JOY_BTN12
+                Throttle Button     JOY_BTN15
+                Pinkie Switch FWD   JOY_BTN13
+                Pinkie Swift AFT    JOY_BTN14
+                FLAPS UP            JOY_BTN22
+                FLAPS DWN           JOY_BTN23
+
+                EAC                 JOY_BTN24
+                RDR ALTM            JOY_BTN25
+                AP                  JOY_BTN26
+                LASTE / PATH        JOY_BTN27
+                LASTE / ALT         JOY_BTN28
+                L/G WRN             JOY_BTN21
+                flaps up            JOY_BTN22
+                flaps down          JOY_BTN23
+                APU start           JOY_BTN20
+                IGN L               JOY_BTN18 | JOY_BTN31
+                IGN R               JOY_BTN19 | JOY_BTN32
+                ENG FLOW L          JOY_BTN16
+                ENG FLOW R          JOY_BTN17
+                Note - slew press is not covered currently
+        """
+        self.name = 'virpil_throttle'
+        self.controller_type = 'hotas'
+        self.ignore_mapping = {}
+        self.switches = []
+        self.throttle_file = 'virpil_throttle.png'
+        self.render_stick = False
+        self.render_throttle = True
+
+        self.switch_key = switch_key
+        self.control_mapping = {}
+        self.position_mapping = {}
+        self.switched_mapping = {}
+        # 38-43 = 56-61
+        self.add_control('JOY_BTN1', 'JOY_BTN1', 75, 170, SIZE_VIRPIL_SMALL, 'throttle')
+        self.add_control('JOY_BTN2', 'JOY_BTN2', 75, 115, SIZE_VIRPIL_SMALL, 'throttle')
+        self.add_control('JOY_BTN3', 'JOY_BTN3', 75, 220, SIZE_VIRPIL_SMALL, 'throttle')
+
+        self.add_control('JOY_BTN4', 'JOY_BTN4', 75, 320, SIZE_VIRPIL_SMALL, 'throttle')
+
+        self.add_control('JOY_BTN5', 'JOY_BTN5', 220, 425, SIZE_VIRPIL_SMALL, 'throttle')
+        self.add_control('JOY_BTN6', 'JOY_BTN6', 220, 380, SIZE_VIRPIL_SMALL, 'throttle')
+        self.add_control('JOY_BTN7', 'JOY_BTN7', 220, 320, SIZE_VIRPIL_SMALL, 'throttle')
+
+        self.add_control('JOY_BTN8', 'JOY_BTN8', 830, 170, SIZE_VIRPIL_SMALL, 'throttle')
+        self.add_control('JOY_BTN9', 'JOY_BTN9', 830, 120, SIZE_VIRPIL_SMALL, 'throttle')
+        self.add_control('JOY_BTN10', 'JOY_BTN10', 980, 170, SIZE_VIRPIL_SMALL, 'throttle')
+        self.add_control('JOY_BTN11', 'JOY_BTN11', 830, 225, SIZE_VIRPIL_SMALL, 'throttle')
+        self.add_control('JOY_BTN12', 'JOY_BTN12', 695, 170, SIZE_VIRPIL_SMALL, 'throttle')
+
+        self.add_control('JOY_BTN13', 'JOY_BTN13', 1190, 130, SIZE_VIRPIL_SMALL, 'throttle')
+
+        self.add_control('JOY_BTN14', 'JOY_BTN14', 765, 375, SIZE_VIRPIL_SMALL, 'throttle')
+        self.add_control('JOY_BTN15', 'JOY_BTN15', 765, 430, SIZE_VIRPIL_SMALL, 'throttle')
+
+        self.add_control('JOY_BTN16', 'JOY_BTN16', 1050, 300, SIZE_VIRPIL_SMALL, 'throttle')
+        self.add_control('JOY_BTN17', 'JOY_BTN17', 1195, 300, SIZE_VIRPIL_SMALL, 'throttle')
+        self.add_control('JOY_BTN18', 'JOY_BTN18', 1050, 355, SIZE_VIRPIL_SMALL, 'throttle')
+        self.add_control('JOY_BTN19', 'JOY_BTN19', 905, 300, SIZE_VIRPIL_SMALL, 'throttle')
+        self.add_control('JOY_BTN20', 'JOY_BTN20', 1050, 250, SIZE_VIRPIL_SMALL, 'throttle')
+
+        self.add_control('JOY_BTN21', 'JOY_BTN21', 1195, 600, SIZE_VIRPIL_SMALL, 'throttle')
+
+        self.add_control('JOY_BTN22', 'JOY_BTN22', 580, 300, SIZE_VIRPIL_SMALL, 'throttle')
+        self.add_control('JOY_BTN23', 'JOY_BTN23', 580, 350, SIZE_VIRPIL_SMALL, 'throttle')
+        self.add_control('JOY_BTN24', 'JOY_BTN24', 435, 300, SIZE_VIRPIL_SMALL, 'throttle')
+        self.add_control('JOY_BTN25', 'JOY_BTN25', 580, 245, SIZE_VIRPIL_SMALL, 'throttle')
+        self.add_control('JOY_BTN26', 'JOY_BTN26', 720, 300, SIZE_VIRPIL_SMALL, 'throttle')
+
+        self.add_control('JOY_BTN27', 'JOY_BTN27', 1050, 480, SIZE_VIRPIL_SMALL, 'throttle')
+        self.add_control('JOY_BTN28', 'JOY_BTN28', 1050, 535, SIZE_VIRPIL_SMALL, 'throttle')
+        self.add_control('JOY_BTN29', 'JOY_BTN29', 905, 480, SIZE_VIRPIL_SMALL, 'throttle')
+        self.add_control('JOY_BTN30', 'JOY_BTN30', 1050, 425, SIZE_VIRPIL_SMALL, 'throttle')
+        self.add_control('JOY_BTN31', 'JOY_BTN31', 1190, 480, SIZE_VIRPIL_SMALL, 'throttle')
+
+        self.add_control('JOY_BTN32', 'JOY_BTN32', 575, 425, SIZE_VIRPIL_SMALL, 'throttle')
+
+        self.add_control('JOY_BTN33', 'JOY_BTN33', 1045, 615, SIZE_VIRPIL_SMALL, 'throttle')
+
+        self.add_control('JOY_BTN34', 'JOY_BTN34', 575, 495, SIZE_VIRPIL_SMALL, 'throttle')
+
+        self.add_control('JOY_BTN35', 'JOY_BTN35', 575, 570, SIZE_VIRPIL_SMALL, 'throttle')
+
+        self.add_control('JOY_BTN36', 'JOY_BTN36', 365, 495, SIZE_VIRPIL_SMALL, 'throttle')
+
+        self.add_control('JOY_BTN37', 'JOY_BTN37', 365, 550, SIZE_VIRPIL_SMALL, 'throttle')
+
+        # labeled in the image as 38-43 but actually 56-61
+        self.add_control('JOY_BTN38', 'JOY_BTN56', 900, 725, SIZE_VIRPIL_SMALL, 'throttle')
+        self.add_control('JOY_BTN39', 'JOY_BTN57', 1050, 725, SIZE_VIRPIL_SMALL, 'throttle')
+        self.add_control('JOY_BTN40', 'JOY_BTN58', 1195, 725, SIZE_VIRPIL_SMALL, 'throttle')
+        self.add_control('JOY_BTN41', 'JOY_BTN59', 900, 780, SIZE_VIRPIL_SMALL, 'throttle')
+        self.add_control('JOY_BTN42', 'JOY_BTN60', 1050, 780, SIZE_VIRPIL_SMALL, 'throttle')
+        self.add_control('JOY_BTN43', 'JOY_BTN61', 1195, 780, SIZE_VIRPIL_SMALL, 'throttle')
+
+        self.add_control('JOY_BTN44', 'JOY_BTN44', 75, 610, SIZE_VIRPIL_SMALL, 'throttle')
+        self.add_control('JOY_BTN45', 'JOY_BTN45', 75, 665, SIZE_VIRPIL_SMALL, 'throttle')
+
+        self.add_control('JOY_BTN46', 'JOY_BTN46', 220, 610, SIZE_VIRPIL_SMALL, 'throttle')
+        self.add_control('JOY_BTN47', 'JOY_BTN47', 220, 665, SIZE_VIRPIL_SMALL, 'throttle')
+
+        self.add_control('JOY_BTN48', 'JOY_BTN48', 365, 610, SIZE_VIRPIL_SMALL, 'throttle')
+        self.add_control('JOY_BTN49', 'JOY_BTN49', 365, 665, SIZE_VIRPIL_SMALL, 'throttle')
+
+        self.add_control('JOY_BTN50', 'JOY_BTN50', 150, 810, SIZE_VIRPIL_SMALL, 'throttle')
+        self.add_control('JOY_BTN51', 'JOY_BTN51', 150, 870, SIZE_VIRPIL_SMALL, 'throttle')
+        self.add_control('JOY_BTN52', 'JOY_BTN52', 150, 760, SIZE_VIRPIL_SMALL, 'throttle')
+
+        self.add_control('JOY_BTN53', 'JOY_BTN53', 290, 810, SIZE_VIRPIL_SMALL, 'throttle')
+        self.add_control('JOY_BTN54', 'JOY_BTN54', 290, 870, SIZE_VIRPIL_SMALL, 'throttle')
+        self.add_control('JOY_BTN55', 'JOY_BTN55', 290, 760, SIZE_VIRPIL_SMALL, 'throttle')
+
+        self.add_control('JOY_RX', 'JOY_RX', 120, 30, SIZE_VIRPIL_SMALL, 'throttle')
+        self.add_control('JOY_RY', 'JOY_RY', 550, 30, SIZE_VIRPIL_SMALL, 'throttle')
+
+        self.add_control('JOY_X', 'JOY_X', 1170, 185, SIZE_VIRPIL_SMALL, 'throttle')
+        self.add_control('JOY_Y', 'JOY_Y', 1170, 80, SIZE_VIRPIL_SMALL, 'throttle')
+
+        self.add_control('JOY_RZ', 'JOY_RZ', 880, 640, SIZE_VIRPIL_SMALL, 'throttle')
+
+        self.add_control('JOY_Z', 'JOY_Z', 340, 225, SIZE_VIRPIL_SMALL, 'throttle')
+        # Switched
+        """
+        if switch_key:
+            self.add_control('mic_switch_fwd_s', 'JOY_BTN4', 572, 15, SIZE_STANDARD_NORMAL, 'throttle')
+        """
 
     def add_control(self, friendly_name, technical_name, x, y, size, location):
         """
