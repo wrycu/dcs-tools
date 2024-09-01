@@ -102,6 +102,7 @@ class Renderer:
         # add some spaces to reduce the changes of the text being too long
         message = message.replace('/', ' / ')
         message = message.replace('(', ' (')
+        message = message.replace('-', ' - ')
         # TODO known bugs:
         # * if a given control has no spaces and is longer than the size permitted, we will hang
         font_size = 18
@@ -119,7 +120,11 @@ class Renderer:
                 the_draw.text((x, y), message[0:position], fill=color, font=font)
             else:
                 position = message[0:size].rfind('/')
-                the_draw.text((x, y), message[0:position + 1], fill=color, font=font)
+                if position != -1:
+                    the_draw.text((x, y), message[0:position + 1], fill=color, font=font)
+                else:
+                    the_draw.text((x, y), message, fill=color, font=font)
+                    position = len(message)
             message = message[position + 1:]
             # next line should be 15 pixels down
             y += 15
